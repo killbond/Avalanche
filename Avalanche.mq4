@@ -10,7 +10,8 @@ double currentPriceBid;
 double currentPriceAsk;
 
 extern string monInfo = "Контролирует вывод мониторинга";
-extern bool   drawMonitor = true;
+extern bool   drawMonitor  = true;
+extern bool   Log          = true;
 extern string lotInfo = "Размер лота";
 extern double lotSize = 0.01;
 extern string ProfitInfo = "Минимальная прибыль для цикла сделок в валюте депозита";
@@ -24,12 +25,20 @@ bool canHadge     = false;
 int currentTicket       = 0;
 int ordersCntr          = 0;
 int avalancheArm        = 0;
+int logHangle           = 0;
 
 int init() {
+   logHangle = LogInit();
+   if (1 < logHangle) {
+      Alert("Ошибка инициализации лог файла!");
+   }
+   LogAdd("Лавина успешно загружена!");
    return(0);
 }
 
 int deinit() {
+   FileClose(logHangle);
+   LogAdd("Деинициализация Лавины...");
    return(0);
 }
 
@@ -76,37 +85,45 @@ int start() {
    
    double currentStopLoss = 0;
    
+   LogAdd("Начинаю вычисления переменных для текущего тика ... ");  
    for (int i = OrdersTotal()-1; i >= 0; i--) {
-      OrderSelect(i, SELECT_BY_POS);     
-      if ((OrderOpenTime() > opnTime) && (OrderType() == OP_BUY) || (OrderType() == OP_SELL)) {   
+      OrderSelect(i, SELECT_BY_POS);           
+      LogAdd("Выбираю ордер с тикетом: " + i); 
+      if ((OrderOpenTime() > opnTime) && (OrderType() == OP_BUY) || (OrderType() == OP_SELL)) {    
          opnTime = OrderOpenTime();
          currentTicket = OrderTicket(); 
-         currentStopLoss = OrderStopLoss();    
+         currentStopLoss = OrderStopLoss();          
+         LogAdd("Ордер открыт позже предыдущего, не является отложенным. Записываю переменные: opnTime - " + opnTime + ", currentTicket - " + currentTicket + ", currentStopLoss - " + currentStopLoss + ".");
       }
       if (OrderType() == OP_BUY) {         
          buyCntr ++;   
          buyOpnPrice = OrderOpenPrice();
          lotsSumBuy += OrderLots();
-         TrailingByShadows(OrderTicket(), Period(), 11, 0);   
+         TrailingByShadows(OrderTicket(), Period(), 11, 0); 
+         LogAdd("Ордер не является отложенным, тип ордера - на покупку, обновляю переменные, пытаюсь трейлить: buyCntr - " + buyCntr + ", buyOpnPrice - " + buyOpnPrice + ", lotsSumBuy - " + lotsSumBuy + ".");  
       }  
       if (OrderType() == OP_SELL) {
          sellCntr ++;
          sellOpnPrice = OrderOpenPrice();
          lotsSumSell += OrderLots();
          TrailingByShadows(OrderTicket(), Period(), 11, 0);
+         LogAdd("Ордер не является отложенным, тип ордера - на продажу, обновляю переменные, пытаюсь трейлить: sellCntr - " + sellCntr + ", sellOpnPrice - " + sellOpnPrice + ", lotsSumSell - " + lotsSumSell + ".");
       }  
       if (OrderType() == OP_SELLSTOP) {
-         sellOpnPrice = OrderOpenPrice();
+         sellOpnPrice = OrderOpenPrice();         
+         LogAdd("Ордер является отложенным, тип ордера - на продажу, фиксирую цену открытия: sellOpnPrice - " + sellOpnPrice + ".");
       }  
       if (OrderType() == OP_BUYSTOP) {
          buyOpnPrice = OrderOpenPrice();
+         LogAdd("Ордер является отложенным, тип ордера - на покупку, фиксирую цену открытия: buyOpnPrice - " + buyOpnPrice + ".");
       }  
    }
-      
+   LogAdd("Вычисления переменных для текущего тика завершены."); 
    OrderSelect(currentTicket, SELECT_BY_TICKET);
    
    if (((ordersCntr != buyCntr + sellCntr) && (avalancheArm > 0)) || ((buyOpnPrice == 0) && (sellOpnPrice == 0))) { 
       changeFlag(3, true); 
+      LogAdd("Достигнуто условие хеджирования, переменные при достижении условия: ordersCntr - " + ordersCntr + ", buyCntr - " + buyCntr + ", sellCntr - " + sellCntr + ", " + ", avalancheArm - " + avalancheArm + ", buyOpnPrice - " + buyOpnPrice + ", sellOpnPrice - " + sellOpnPrice);
    }  
       
    if ((avalancheArm == 0) && ((currentPriceBid == 0) || (currentPriceAsk == 0))) {
@@ -114,6 +131,7 @@ int start() {
          avalancheArm = GlobalVariableGet("avArm");
          currentPriceBid = GlobalVariableGet("avCurPriceBid");
          currentPriceAsk = GlobalVariableGet("avCurPriceAsk");
+         LogAdd("Обнаружено отсутствие переменных плеча и цен отложенных ордеров. Пытаюсь изъять их из глобальных переменных. Новые значения: avalancheArm - " + avalancheArm + ", currentPriceBid - " + currentPriceBid + ", currentPriceAsk - " + currentPriceAsk + ".");
       }      
    }
    
@@ -123,15 +141,18 @@ int start() {
       if (OrderType() == OP_BUY) {
          if(OrderSend(Symbol(),OP_SELLSTOP,(lotsSumSell+lotsSumBuy),NormalizeDouble(currentPriceBid-avalancheArm*Point,Digits),0,0,0,NULL,NULL,0,Blue) > 0)
          changeFlag(3, false);       
+         LogAdd("Открываю Sell Stop с лотом " + lotsSumSell+lotsSumBuy + ".");
       } 
       if (OrderType() == OP_SELL) {
          if(OrderSend(Symbol(),OP_BUYSTOP,(lotsSumSell+lotsSumBuy),NormalizeDouble(currentPriceAsk+avalancheArm*Point,Digits),0,0,0,NULL,NULL,0,Green) > 0)
          changeFlag(3, false); 
+         LogAdd("Открываю Buy Stop с лотом " + lotsSumSell+lotsSumBuy + ".");
       }  
    }
       
    if (currentStopLoss != 0) {
-      if (OrderType() == OP_BUY) {      
+      if (OrderType() == OP_BUY) {  
+      LogAdd("Закрываю открытые ордеры на покупку.");   
          for (i = OrdersTotal()-1; i >= 0; i--) {
             OrderSelect(i, SELECT_BY_POS);
             if (OrderType() == OP_SELLSTOP) {
@@ -154,6 +175,7 @@ int start() {
          }
       }  
       if (OrderType() == OP_SELL) {
+      LogAdd("Закрываю открытые ордеры на продажу.");  
          for (i = OrdersTotal()-1; i >= 0; i--) {
             OrderSelect(i, SELECT_BY_POS);
             if (OrderType() == OP_BUYSTOP) {
@@ -209,6 +231,7 @@ void saveRates () {
    GlobalVariableSet("avArm", avalancheArm);
    GlobalVariableSet("avCurPriceBid", currentPriceBid);
    GlobalVariableSet("avCurPriceAsk", currentPriceAsk);
+   LogAdd("Сохраняю текущие значения переменных в глобальные: avalancheArm - " + avalancheArm + ", currentPriceBid - " + ", currentPriceAsk - " + currentPriceAsk + ".");
 }
 
 int getMedian ()
@@ -233,16 +256,20 @@ void changeFlag(int Flag, bool State) {
    string strState;
    switch (Flag) {
       case 0: {
-         canTrade     = State;
+         canTrade     = State;         
+         LogAdd("Меняю флаг возможности торговли в состояние: " + State + ".");
       }
       case 1: {
          changePrice  = State;
+         LogAdd("Меняю флаг изменения цен в состояние: " + State + ".");
       }
       case 2: {
          changeLot    = State;
+         LogAdd("Меняю флаг изменения лота в состояние: " + State + ".");
       }
       case 3: {
          canHadge     = State;
+         LogAdd("Меняю флаг хеджирования в состояние: " + State + ".");
       }
    }
 }
@@ -304,4 +331,17 @@ void TrailingByShadows(int ticket,int tmfrm,int bars_n, int indent) {
       if (AcountProfitEx(new_extremum) > ProfitSize)
       OrderModify(ticket, OrderOpenPrice(), new_extremum + (indent + MarketInfo(Symbol(), MODE_SPREAD)) * Point, OrderTakeProfit(), OrderExpiration());
    }      
+}
+
+int LogInit () {
+  int handle;
+  handle = FileOpen("Avalanche.log",FILE_CSV|FILE_READ|FILE_WRITE,';');
+  return(handle);
+}
+void LogAdd(string msg) {   
+   if (Log) {
+      string currentDate = Year() + "." + Month() + "." + Day() + " " + Hour() + ":" + Minute() + ":" + Seconds();
+      FileSeek(logHangle, 0, SEEK_END);
+      FileWrite(logHangle, currentDate + " - " + msg);
+   }
 }
