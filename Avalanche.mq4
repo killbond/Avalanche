@@ -258,18 +258,22 @@ void changeFlag(int Flag, bool State) {
       case 0: {
          canTrade     = State;         
          LogAdd("Меняю флаг возможности торговли в состояние: " + State + ".");
+         break;
       }
       case 1: {
          changePrice  = State;
          LogAdd("Меняю флаг изменения цен в состояние: " + State + ".");
+         break;
       }
       case 2: {
          changeLot    = State;
          LogAdd("Меняю флаг изменения лота в состояние: " + State + ".");
+         break;
       }
       case 3: {
          canHadge     = State;
          LogAdd("Меняю флаг хеджирования в состояние: " + State + ".");
+         break;
       }
    }
 }
