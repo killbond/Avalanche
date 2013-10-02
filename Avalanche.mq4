@@ -101,7 +101,7 @@ int start() {
             buyOpnPrice = OrderOpenPrice();
             lotsSumBuy += OrderLots();
             TrailingByShadows(OrderTicket(), Period(), 11, 0); 
-            LogAdd("ќрдер не €вл€етс€ отложенным, тип ордера - на покупку, обновл€ю переменные, пытаюсь трейлить: buyCntr - " + buyCntr + ", buyOpnPrice - " + buyOpnPrice + ", lotsSumBuy - " + lotsSumBuy + ".");  
+            LogAdd("ќрдер не €вл€етс€ отложенным, тип ордера - " + OrderType() + ", обновл€ю переменные, пытаюсь трейлить: buyCntr - " + buyCntr + ", buyOpnPrice - " + buyOpnPrice + ", lotsSumBuy - " + lotsSumBuy + ".");  
             break;
          }
          case OP_SELL: {
@@ -109,17 +109,17 @@ int start() {
             sellOpnPrice = OrderOpenPrice();
             lotsSumSell += OrderLots();
             TrailingByShadows(OrderTicket(), Period(), 11, 0);
-            LogAdd("ќрдер не €вл€етс€ отложенным, тип ордера - на продажу, обновл€ю переменные, пытаюсь трейлить: sellCntr - " + sellCntr + ", sellOpnPrice - " + sellOpnPrice + ", lotsSumSell - " + lotsSumSell + ".");      
+            LogAdd("ќрдер не €вл€етс€ отложенным, тип ордера - " + OrderType() + ", обновл€ю переменные, пытаюсь трейлить: sellCntr - " + sellCntr + ", sellOpnPrice - " + sellOpnPrice + ", lotsSumSell - " + lotsSumSell + ".");      
             break;
          }
          case OP_SELLSTOP: {
             sellOpnPrice = OrderOpenPrice();         
-            LogAdd("ќрдер €вл€етс€ отложенным, тип ордера - на продажу, фиксирую цену открыти€: sellOpnPrice - " + sellOpnPrice + ".");
+            LogAdd("ќрдер €вл€етс€ отложенным, тип ордера - " + OrderType() + ", фиксирую цену открыти€: sellOpnPrice - " + sellOpnPrice + ".");
             break;
          }
          case OP_BUYSTOP: {
             buyOpnPrice = OrderOpenPrice();
-            LogAdd("ќрдер €вл€етс€ отложенным, тип ордера - на покупку, фиксирую цену открыти€: buyOpnPrice - " + buyOpnPrice + ".");
+            LogAdd("ќрдер €вл€етс€ отложенным, тип ордера - " + OrderType() + ", фиксирую цену открыти€: buyOpnPrice - " + buyOpnPrice + ".");
             break;
          }
       }  
