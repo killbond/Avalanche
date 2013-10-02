@@ -95,33 +95,39 @@ int start() {
          currentStopLoss = OrderStopLoss();          
          LogAdd("Ордер открыт позже предыдущего, не является отложенным. Записываю переменные: opnTime - " + opnTime + ", currentTicket - " + currentTicket + ", currentStopLoss - " + currentStopLoss + ".");
       }
-      if (OrderType() == OP_BUY) {         
-         buyCntr ++;   
-         buyOpnPrice = OrderOpenPrice();
-         lotsSumBuy += OrderLots();
-         TrailingByShadows(OrderTicket(), Period(), 11, 0); 
-         LogAdd("Ордер не является отложенным, тип ордера - на покупку, обновляю переменные, пытаюсь трейлить: buyCntr - " + buyCntr + ", buyOpnPrice - " + buyOpnPrice + ", lotsSumBuy - " + lotsSumBuy + ".");  
-      }  
-      if (OrderType() == OP_SELL) {
-         sellCntr ++;
-         sellOpnPrice = OrderOpenPrice();
-         lotsSumSell += OrderLots();
-         TrailingByShadows(OrderTicket(), Period(), 11, 0);
-         LogAdd("Ордер не является отложенным, тип ордера - на продажу, обновляю переменные, пытаюсь трейлить: sellCntr - " + sellCntr + ", sellOpnPrice - " + sellOpnPrice + ", lotsSumSell - " + lotsSumSell + ".");
-      }  
-      if (OrderType() == OP_SELLSTOP) {
-         sellOpnPrice = OrderOpenPrice();         
-         LogAdd("Ордер является отложенным, тип ордера - на продажу, фиксирую цену открытия: sellOpnPrice - " + sellOpnPrice + ".");
-      }  
-      if (OrderType() == OP_BUYSTOP) {
-         buyOpnPrice = OrderOpenPrice();
-         LogAdd("Ордер является отложенным, тип ордера - на покупку, фиксирую цену открытия: buyOpnPrice - " + buyOpnPrice + ".");
+      switch (OrderType()) {
+         case OP_BUY: {
+            buyCntr ++;   
+            buyOpnPrice = OrderOpenPrice();
+            lotsSumBuy += OrderLots();
+            TrailingByShadows(OrderTicket(), Period(), 11, 0); 
+            LogAdd("Ордер не является отложенным, тип ордера - на покупку, обновляю переменные, пытаюсь трейлить: buyCntr - " + buyCntr + ", buyOpnPrice - " + buyOpnPrice + ", lotsSumBuy - " + lotsSumBuy + ".");  
+            break;
+         }
+         case OP_SELL: {
+            sellCntr ++;
+            sellOpnPrice = OrderOpenPrice();
+            lotsSumSell += OrderLots();
+            TrailingByShadows(OrderTicket(), Period(), 11, 0);
+            LogAdd("Ордер не является отложенным, тип ордера - на продажу, обновляю переменные, пытаюсь трейлить: sellCntr - " + sellCntr + ", sellOpnPrice - " + sellOpnPrice + ", lotsSumSell - " + lotsSumSell + ".");      
+            break;
+         }
+         case OP_SELLSTOP: {
+            sellOpnPrice = OrderOpenPrice();         
+            LogAdd("Ордер является отложенным, тип ордера - на продажу, фиксирую цену открытия: sellOpnPrice - " + sellOpnPrice + ".");
+            break;
+         }
+         case OP_BUYSTOP: {
+            buyOpnPrice = OrderOpenPrice();
+            LogAdd("Ордер является отложенным, тип ордера - на покупку, фиксирую цену открытия: buyOpnPrice - " + buyOpnPrice + ".");
+            break;
+         }
       }  
    }
    LogAdd("Вычисления переменных для текущего тика завершены."); 
    OrderSelect(currentTicket, SELECT_BY_TICKET);
    
-   if (((ordersCntr != buyCntr + sellCntr) && (avalancheArm > 0)) || ((buyOpnPrice == 0) && (sellOpnPrice == 0))) { 
+   if ((ordersCntr != buyCntr + sellCntr) && (avalancheArm > 0)) { 
       changeFlag(3, true); 
       LogAdd("Достигнуто условие хеджирования, переменные при достижении условия: ordersCntr - " + ordersCntr + ", buyCntr - " + buyCntr + ", sellCntr - " + sellCntr + ", " + ", avalancheArm - " + avalancheArm + ", buyOpnPrice - " + buyOpnPrice + ", sellOpnPrice - " + sellOpnPrice);
    }  
