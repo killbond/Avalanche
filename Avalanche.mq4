@@ -68,6 +68,7 @@ int start() {
    int opnTime = 0;
    int buyCntr = 0;
    int sellCntr = 0;
+   int stopLossTicket = -1;
    double lotsSumBuy = 0;
    double lotsSumSell = 0;
    double buyOpnPrice = 0;
@@ -90,9 +91,12 @@ int start() {
       OrderSelect(i, SELECT_BY_POS);           
       //LogAdd("Выбираю ордер с тикетом: " + i); 
       if ((OrderOpenTime() > opnTime) && (OrderType() == OP_BUY) || (OrderType() == OP_SELL)) {    
-         opnTime = OrderOpenTime();
-         currentTicket = OrderTicket(); 
-         currentStopLoss = OrderStopLoss();          
+         opnTime = OrderOpenTime(); 
+         currentTicket = OrderTicket();
+         if(OrderStopLoss() > 0) {
+            currentStopLoss = OrderStopLoss();
+            stopLossTicket = OrderTicket();    
+         }      
          //LogAdd("Ордер открыт позже предыдущего, не является отложенным. Записываю переменные: opnTime - " + opnTime + ", currentTicket - " + currentTicket + ", currentStopLoss - " + currentStopLoss + ".");
       }
       switch (OrderType()) {
@@ -155,54 +159,23 @@ int start() {
          //LogAdd("Открываю Buy Stop с лотом " + lotsSumSell+lotsSumBuy + ".");
       }  
    }
-      
-   if (currentStopLoss != 0) {
-      if (OrderType() == OP_BUY) {  
-      //LogAdd("Закрываю открытые ордеры на покупку.");   
-         for (i = OrdersTotal()-1; i >= 0; i--) {
-            OrderSelect(i, SELECT_BY_POS);
-            if (OrderType() == OP_SELLSTOP) {
-               while (true) {
-                  if (OrderDelete(OrderTicket())) {
-                     break;
-                  } else {
-                  }
-               } 
-            }
-            if (OrderType() == OP_SELL) {
-               while (true) {
-                  if (OrderClose(OrderTicket(),OrderLots(),NormalizeDouble(Ask,Digits),0)) {
-                     break;
-                  } else {
-                     RefreshRates(); 
-                  }
-               } 
-            }      
-         }
-      }  
-      if (OrderType() == OP_SELL) {
-      //LogAdd("Закрываю открытые ордеры на продажу.");  
-         for (i = OrdersTotal()-1; i >= 0; i--) {
-            OrderSelect(i, SELECT_BY_POS);
-            if (OrderType() == OP_BUYSTOP) {
-               while (true) {
-                  if (OrderDelete(OrderTicket())) {
-                     break;
-                  } else {
-                     RefreshRates(); 
-                  }
-               } 
-            }
-            if (OrderType() == OP_BUY) {
-               while (true) {
-                  if (OrderClose(OrderTicket(),OrderLots(),NormalizeDouble(Bid,Digits),0)) {
-                     break;
-                  }
-               } 
-            }      
-         }
+   
+   if(stopLossTicket != -1) {  
+      OrderSelect(stopLossTicket, SELECT_BY_TICKET);
+      switch (OrderType()) {
+         case OP_BUY: {  
+         //LogAdd("Закрываю открытые ордеры на покупку.");   
+            closeSellOrders();
+            break;
+         }  
+         case OP_SELL: {
+         //LogAdd("Закрываю открытые ордеры на продажу.");  
+            closeBuyOrders();
+            break;
+         }      
       }
    }
+   
    if (drawMonitor) {
       string str="Баланс: "+DoubleToStr(AccountBalance(),2);
       ObjectSetText("0",str,10,"Arial Black",White);
@@ -231,6 +204,60 @@ int start() {
       ObjectSetText("6",str,10,"Arial Black",White);
    }
    return(0);
+}
+
+void closeSellOrders() {   
+   for (int i = OrdersTotal()-1; i >= 0; i--) {
+      OrderSelect(i, SELECT_BY_POS);
+      switch (OrderType()) {
+         case OP_SELLSTOP: {
+            while (true) {
+               if (OrderDelete(OrderTicket())) {
+                  break;
+               }
+            } 
+            break;
+         }
+         case OP_SELL: {
+            while (true) {
+               if (OrderClose(OrderTicket(),OrderLots(),NormalizeDouble(Ask,Digits),0)) {
+                  break;                  
+               }
+               else {
+                  RefreshRates();
+               }
+            }
+            break; 
+         }     
+      } 
+   }
+}
+
+void closeBuyOrders() {
+   for (int i = OrdersTotal()-1; i >= 0; i--) {
+      OrderSelect(i, SELECT_BY_POS);
+      switch (OrderType()) {
+         case OP_BUYSTOP: {
+            while (true) {
+               if (OrderDelete(OrderTicket())) {
+                  break;
+               }
+            } 
+            break;
+         }
+         case OP_BUY: {
+            while (true) {
+               if (OrderClose(OrderTicket(),OrderLots(),NormalizeDouble(Bid,Digits),0)) {
+                  break;
+               }
+               else {
+                  RefreshRates();
+               }
+            }
+            break; 
+         }   
+      }   
+   }
 }
 
 void saveRates () {
@@ -297,32 +324,41 @@ double GetTickValue(string CurrentQuote) {
       return (MarketInfo(CurrentQuote, MODE_LOTSIZE) * MarketInfo(CurrentQuote, MODE_TICKSIZE) * MarketInfo(StringConcatenate(BaseCurr,AccountCurr), MODE_BID) / MarketInfo(CurrentQuote, MODE_BID));
 }
 
-double AcountProfitEx(double Price) {
-   double   ProfitSum   = 0;
-   double   TickValue   = 0;
-   TickValue = MarketInfo(Symbol(), MODE_TICKVALUE);
-   if (IsTesting()) TickValue = GetTickValue(Symbol());
-   LogAdd("Пытаюсь вычислить общую прибыль открытых позиций по цене - " + Price + ", TickValue - " + TickValue);
-   for (int i = OrdersTotal()-1; i >= 0; i--) {
-      OrderSelect(i, SELECT_BY_POS);
-      if (OrderType() == OP_BUY) {
-         ProfitSum += OrderProfit() + OrderLots() * ((Price - Bid) / Point * TickValue);
-         LogAdd("Выбран ордер - " + OrderTicket() + ", прибыль ордера - " + OrderProfit() + ", объем ордера - " + OrderLots() + ", ((Price - Bid) / Point * TickValue) - " + ((Price - Bid) / Point * TickValue) + ", сумма прибыли - " + ProfitSum);
-      }
-      if (OrderType() == OP_SELL) {
-         ProfitSum += OrderProfit() - OrderLots() * ((Price - Ask) / Point * TickValue);
-         LogAdd("Выбран ордер - " + OrderTicket() + ", прибыль ордера - " + OrderProfit() + ", объем ордера - " + OrderLots() + ", ((Price - Bid) / Point * TickValue) - " + ((Price - Bid) / Point * TickValue) + ", сумма прибыли - " + ProfitSum);
+double AcountProfitEx(double Price) {   
+   double TickValue, delta;
+   double lotSum;
+   string SymbolName;
+   
+   SymbolName = Symbol();
+   TickValue = MarketInfo( SymbolName, MODE_TICKVALUE) / Point;
+   delta = ( ( Price - ( MarketInfo( SymbolName, MODE_SPREAD ) * Point ) ) - Ask ) * TickValue;
+
+   lotSum = 0.0; 
+   LogAdd("Пытаюсь вычислить общую прибыль открытых позиций по цене Bid(Ask): " + Bid + "(" + Ask + "), TickValue: " + TickValue);
+   for (int i = 0; i <= OrdersTotal()-1; i++)
+   {
+      OrderSelect(i, SELECT_BY_POS);     
+      if ( OrderSymbol() == SymbolName )
+      { 
+         if (OrderType() == OP_BUY)    { 
+            lotSum += OrderProfit() + OrderLots() * delta; 
+            LogAdd(OrderTicket() + ": " + (OrderProfit() + OrderLots() * delta));
+         }
+         if (OrderType() == OP_SELL)   { 
+            lotSum += OrderProfit() - OrderLots() * delta; 
+            LogAdd(OrderTicket() + ": " + (OrderProfit() + OrderLots() * delta));
+         }
       }
    }   
-   LogAdd("Вычисления закончены, сумма прибыли - " + ProfitSum);
-   return (ProfitSum);
+   LogAdd("Вычисления закончены, сумма прибыли: " + lotSum);
+   return(lotSum);
 }
 
 void TrailingByShadows(int ticket,int tmfrm,int bars_n, int indent) {  
    int i;
    double new_extremum;
    
-   LogAdd("Пытаюсь трейлить ордер - " + ticket);
+   //LogAdd("Пытаюсь трейлить ордер - " + ticket);
    if ((bars_n<1) || (indent<0) || (ticket==0) || ((tmfrm!=1) && (tmfrm!=5) && (tmfrm!=15) && (tmfrm!=30) && (tmfrm!=60) && (tmfrm!=240) && (tmfrm!=1440) && (tmfrm!=10080) && (tmfrm!=43200))) {
       Print("Трейлинг функцией TrailingByShadows() невозможен из-за некорректности значений переданных ей аргументов.");
       return(0);
@@ -332,7 +368,7 @@ void TrailingByShadows(int ticket,int tmfrm,int bars_n, int indent) {
          if (i == 1) new_extremum = iLow(Symbol(), tmfrm, i); 
          else if (new_extremum > iLow(Symbol(), tmfrm, i)) new_extremum = iLow(Symbol(), tmfrm, i);
       }
-      LogAdd("Ордер на покупку, предполагаемая новая цена - " + new_extremum);
+      //LogAdd("Ордер на покупку, предполагаемая новая цена - " + new_extremum);
       if(((new_extremum - indent * Point) > OrderStopLoss() + 1.0 * Point) || (OrderStopLoss() == 0))
       if((new_extremum - indent * Point) > OrderOpenPrice())
       if(new_extremum - indent * Point < Bid - MarketInfo(Symbol(), MODE_STOPLEVEL) * Point)
@@ -345,7 +381,7 @@ void TrailingByShadows(int ticket,int tmfrm,int bars_n, int indent) {
          if (i == 1) new_extremum = iHigh(Symbol(), tmfrm, i); 
          else if (new_extremum < iHigh(Symbol(), tmfrm, i)) new_extremum = iHigh(Symbol(), tmfrm, i);
       }
-      LogAdd("Ордер на продажу, предполагаемая новая цена - " + new_extremum);
+      //LogAdd("Ордер на продажу, предполагаемая новая цена - " + new_extremum);
       if (((new_extremum + (indent + MarketInfo(Symbol(),MODE_SPREAD)) * Point) < OrderStopLoss() - 1.0 * Point) || (OrderStopLoss() == 0)) 
       if ((new_extremum + (indent + MarketInfo(Symbol(),MODE_SPREAD)) * Point) < OrderOpenPrice())                          
       if ((new_extremum + (indent + MarketInfo(Symbol(),MODE_SPREAD)) * Point > Ask + MarketInfo(Symbol(),MODE_STOPLEVEL) * Point)) 
